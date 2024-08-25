@@ -102,3 +102,95 @@ exports.deleteTour = async(req, res) => {
   }
 
 };
+
+exports.getTourStats = async(req, res) => {
+  try {
+    const stats = await Tour.aggregate([
+      {
+        $match: { ratingsAverage: { $gte: 4.5 } }
+      },
+      {
+        $group: {
+          // _id: null,
+          _id: { $toUpper: '$difficulty' },
+          // _id: '$ratingsAverage',
+          numTours: { $sum: 1 }, // for each of documents that goes through this pipeline 1 will be added to numTours
+          numRatings: { $sum: '$ratingsQuantity'},
+          avgRating: { $avg: '$ratingsAverage'},
+          avgPrice: { $avg: '$price'},
+          minPrice: { $min: '$price'},
+          maxPrice: { $max: '$price'}
+        },
+      },
+      {
+        $sort: { avgPrice: 1}  // use new names from above pipeline stage not old field names, 1 means ascending
+      },
+      // {
+      //   $match: { _id: { $ne: 'EASY' } } // excluding easy
+      // }    
+    ]);
+    res.status(201).json({
+      status: 'success',
+      data: {
+        stats
+      }
+    });
+  } catch (err) {
+    res.status(404).json({
+      status: 'fail',
+      message: err
+    });
+  }
+}
+
+// Calculate busiest month of the year. How many tours started in each month of the given year
+exports.getMonthlyPlan = async(req, res) => {
+  try {
+    const year = req.params.year * 1;
+    const plan = await Tour.aggregate([
+      {
+        $unwind: '$startDates'
+      },
+      {
+        $match: {
+          startDates: {
+            $gte: new Date(`${year}-01-01`),
+            $lte: new Date(`${year}-12-31`),
+          }
+        }
+      },
+      {
+        $group: {
+          _id: { $month: '$startDates' },
+          numToursStarts: { $sum: 1 },
+          tours: { $push: '$name' }
+        }
+      },
+      {
+        $addFields: { month: '$_id'}
+      },
+      {
+        $project: {
+          _id: 0
+        }
+      },
+      {
+        $sort: { numToursStarts: -1 }
+      },
+      {
+        $limit: 6
+      }
+    ]);
+    res.status(201).json({
+      status: 'success',
+      data: {
+        plan
+      }
+    });
+  } catch (err) {
+    res.status(404).json({
+      status: 'fail',
+      message: err,
+    });
+  }
+}
