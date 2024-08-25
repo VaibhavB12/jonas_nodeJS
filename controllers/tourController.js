@@ -1,4 +1,6 @@
 const Tour = require('../models/tourModel');
+const APIFeatures = require('../utils/APIFeatures');
+
 exports.aliasTopTours = (req, res, next) => {
   req.query.limit = '5';
   req.query.sort = '-ratingsAverage,price';
@@ -8,43 +10,22 @@ exports.aliasTopTours = (req, res, next) => {
 
 exports.getAllTours = async(req, res) => {
   try {
-    // BUILD QUERY
-    // 1A) filtering
-    const queryObj = { ...req.query };
-    const excludeFields = ['sort', 'limit', 'page', 'fields'];
-    excludeFields.forEach(el => delete queryObj[el])
-    // 1B) advanced filtering
-    let queryStr = JSON.stringify(queryObj);
-    queryStr = queryStr.replace(/\b(gte|gt|lte|lt)\b/g, match => `$${match}`);
-    let query = Tour.find(JSON.parse(queryStr));
-    // 2) sorting
-    if(req.query.stort){
-      const sortBy = req.query.sort.split(',').join(' ');
-      query = query.sort(sortBy);
-    }else {
-      query = query.sort('-createdAt');
-    }
-    // 3) Field limiting
-    if(req.query.fields){
-      const fields = req.query.fields.split(',').join(' ');
-      query = query.select(fields);
-    }else {
-      query = query.select('-__v');
-    }
-    // 4) Pagination
-    const page = req.query.page * 1 || 1;
-    const limit = req.query.limit * 1 || 100;
-    const skip = (page - 1) * limit;
-    query = query.skip(skip).limit(limit);
     // EXECUTE QUERY
-    const tours = await query;
+    const features = new APIFeatures(Tour.find(), req.query)
+      .filter()
+      .sort()
+      .limitFields()
+      .paginate();
+    const tours = await features.query;
+    // SEND RESPONSE
     res.status(201).json({
       status: 'success',
+      results: tours.length,
       data: {
         tours
       }
     });
-  } catch (error) {
+  } catch (err) {
     res.status(400).json({
       status: 'fail',
       message: err
@@ -61,7 +42,7 @@ exports.getTour = async(req, res) => {
         tour
       }
     });
-  } catch (error) {
+  } catch (err) {
     res.status(400).json({
       status: 'fail',
       message: err
@@ -78,7 +59,7 @@ exports.createTour = async (req, res) => {
         tour: newTour
       }
     });
-  } catch (error) {
+  } catch (err) {
     res.status(400).json({
       status: 'fail',
       message: err
@@ -98,7 +79,7 @@ exports.updateTour = async(req, res) => {
         tour
       }
     });
-  } catch (error) {
+  } catch (err) {
     res.status(400).json({
       status: 'fail',
       message: err
@@ -113,10 +94,10 @@ exports.deleteTour = async(req, res) => {
     res.status(204).json({
       status: 'success'
     });
-  } catch (error) {
+  } catch (err) {
     res.status(404).json({
       status: 'fail',
-      message: error
+      message: err
     });
   }
 
